@@ -866,7 +866,9 @@ static const struct nand_ops spinand_ops = {
 
 #ifdef CONFIG_SPL_BUILD
 static const struct spinand_manufacturer *spinand_manufacturers[] = {
-	//&gigadevice_spinand_manufacturer,
+#ifdef CONFIG_SPL_SPI_NAND_SUPPORT_GIGADEVICE
+	&gigadevice_spinand_manufacturer,
+#endif
 #ifdef CONFIG_SPL_SPI_NAND_SUPPORT_LONGSYS
 	&longsys_spinand_manufacturer,
 #endif

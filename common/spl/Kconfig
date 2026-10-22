@@ -799,6 +799,12 @@ config SPL_SPI_NAND_SUPPORT_WINBOND
 	help
 	  Support Winbond SPI NAND in SPL
 
+config SPL_SPI_NAND_SUPPORT_GIGADEVICE
+	bool "Support GigaDevice SPI NAND"
+	depends on SPL_SPI_NAND_SUPPORT
+	help
+	  Support GigaDevice SPI NAND in SPL
+
 endif
 
 config SPL_UBI
