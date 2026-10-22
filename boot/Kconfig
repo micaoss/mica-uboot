@@ -1339,3 +1339,25 @@ config SAVE_PREV_BL_INITRAMFS_START_ADDR
 	  will be created.
 
 endmenu		# Booting
+
+config MICA_UBI_BOOT
+	bool "Mica OS FIT boot over UBI"
+	depends on MTD_UBI && FIT
+	help
+	  Select the deployment from the boot record copies in the UBI volumes
+	  records-a and records-b, persist its trial counter with an atomic LEB
+	  change before anything is launched, and boot the FIT read whole from
+	  the static volume k-<kernelId>. Persistent storage carries data,
+	  never commands.
+
+config MICA_UBI_MTD
+	string "MTD partition holding the UBI device"
+	depends on MICA_UBI_BOOT
+
+config MICA_UBI_FIT_ADDRESS
+	hex "Address the FIT is read to"
+	depends on MICA_UBI_BOOT
+
+config MICA_UBI_FIT_LIMIT
+	int "Most bytes of a FIT read"
+	depends on MICA_UBI_BOOT

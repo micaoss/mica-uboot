@@ -293,6 +293,18 @@ int fdt_chosen(void *fdt)
 	if (nodeoffset < 0)
 		return nodeoffset;
 
+#if defined(CONFIG_MICA_UBI_BOOT) && !defined(CONFIG_SPL_BUILD)
+	{
+		extern char mica_deployment_id[65];
+
+		if (strlen(mica_deployment_id) != 64)
+			return -EINVAL;
+		err = fdt_setprop_string(fdt, nodeoffset, "mica,deployment-id", mica_deployment_id);
+		if (err)
+			return err;
+	}
+#endif
+
 	str = board_fdt_chosen_bootargs();
 
 	if (str) {
