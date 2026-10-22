@@ -805,6 +805,26 @@ config SPL_SPI_NAND_SUPPORT_GIGADEVICE
 	help
 	  Support GigaDevice SPI NAND in SPL
 
+config SPL_SPINAND_RAW
+	bool "Load U-Boot proper from raw SPI NAND, two copies"
+	depends on !SPL_UBI
+	help
+	  Load a legacy image of U-Boot proper from one of two raw regions of
+	  the SPI NAND, skipping bad blocks; the first copy whose CRCs hold is
+	  booted.
+
+config SPL_SPINAND_RAW_OFFS
+	hex "Offset of the first copy"
+	depends on SPL_SPINAND_RAW
+
+config SPL_SPINAND_RAW_OFFS_REDUND
+	hex "Offset of the second copy"
+	depends on SPL_SPINAND_RAW
+
+config SPL_SPINAND_RAW_SIZE
+	hex "Size of each copy's region"
+	depends on SPL_SPINAND_RAW
+
 endif
 
 config SPL_UBI
