@@ -48,7 +48,7 @@ struct checksum_algo checksum_algos[] = {
 };
 
 struct crypto_algo crypto_algos[] = {
-#ifndef CONFIG_AMLOGIC_MODIFY
+#if !defined(CONFIG_AMLOGIC_MODIFY) || defined(CONFIG_MICA_FILE_BOOT)
 	{
 		.name = "rsa2048",
 		.key_len = RSA2048_BYTES,
