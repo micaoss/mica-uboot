@@ -172,3 +172,24 @@
 	phy-names = "usb2-phy";
 	status = "okay";
 };
+
+/ {
+	adc-keys {
+		compatible = "adc-keys";
+		io-channels = <&saradc 1>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <1800000>;
+		poll-interval = <100>;
+		button-recovery {
+			label = "recovery";
+			linux,code = <0x73>;
+			press-threshold-microvolt = <17000>;
+		};
+	};
+};
+
+&saradc {
+	status = "okay";
+	/* Use the always-on 1.8 V rail when no regulator is described. */
+	vdd-microvolts = <1800000>;
+};
