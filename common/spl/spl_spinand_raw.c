@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * SPL: load U-Boot proper from raw SPI NAND, two copies.
+ * SPL: load U-Boot proper from raw SPI NAND.
  *
- * Each copy is a legacy image at the start of its own region of CONFIG_SPL_SPINAND_RAW_SIZE bytes; bad blocks
- * inside a region are skipped. The first copy whose header and data CRCs hold is the one booted, so a copy left
- * half written by a power loss falls back to the other.
+ * U-Boot proper is a legacy image at the start of a region of CONFIG_SPL_SPINAND_RAW_SIZE bytes at
+ * CONFIG_SPL_SPINAND_RAW_OFFS; bad blocks inside the region are skipped. It is booted only when its header and
+ * data CRCs hold.
  */
 
 #include <common.h>
@@ -47,10 +47,10 @@ static int spl_spinand_read_region(struct mtd_info *mtd, loff_t start, loff_t si
 	return 0;
 }
 
-static int spl_spinand_raw_copy(struct mtd_info *mtd, struct spl_image_info *spl_image,
-				struct spl_boot_device *bootdev, loff_t start)
+static int spl_spinand_raw_read(struct mtd_info *mtd, struct spl_image_info *spl_image,
+				struct spl_boot_device *bootdev)
 {
-	const loff_t size = CONFIG_SPL_SPINAND_RAW_SIZE;
+	const loff_t start = CONFIG_SPL_SPINAND_RAW_OFFS, size = CONFIG_SPL_SPINAND_RAW_SIZE;
 	struct image_header *header;
 	int ret;
 
@@ -77,19 +77,14 @@ static int spl_spinand_raw_copy(struct mtd_info *mtd, struct spl_image_info *spl
 
 static int spl_spinand_raw_load_image(struct spl_image_info *spl_image, struct spl_boot_device *bootdev)
 {
-	static const loff_t copies[] = { CONFIG_SPL_SPINAND_RAW_OFFS, CONFIG_SPL_SPINAND_RAW_OFFS_REDUND };
 	struct mtd_info *mtd = spl_spinand_mtd();
-	int i, ret = -ENODEV;
+	int ret;
 
 	if (!mtd)
 		return -ENODEV;
-	for (i = 0; i < ARRAY_SIZE(copies); i++) {
-		ret = spl_spinand_raw_copy(mtd, spl_image, bootdev, copies[i]);
-		printf("SPL: U-Boot copy %c at 0x%llx: %s (%d)\n", 'A' + i, (unsigned long long)copies[i],
-		       ret ? "invalid" : "loaded", ret);
-		if (!ret)
-			return 0;
-	}
+	ret = spl_spinand_raw_read(mtd, spl_image, bootdev);
+	printf("SPL: U-Boot at 0x%llx: %s (%d)\n", (unsigned long long)CONFIG_SPL_SPINAND_RAW_OFFS,
+	       ret ? "invalid" : "loaded", ret);
 	return ret;
 }
 
