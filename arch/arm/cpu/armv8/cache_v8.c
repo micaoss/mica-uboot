@@ -326,9 +326,9 @@ static void split_block(u64 *pte, int level)
 	int levelshift = level2shift(level + 1);
 
 	if (pte_type(pte) != PTE_TYPE_BLOCK)
-		panic("PTE %p (%llx) is not a block. Some driver code wants to "
+		panic("PTE %p (%lx) is not a block. Some driver code wants to "
 		      "modify dcache settings for an range not covered in "
-		      "mem_map.", pte, old_pte);
+		      "mem_map.", pte, (unsigned long)old_pte);
 
 	new_table = create_table();
 	debug("Splitting pte %p (%llx) into %p\n", pte, old_pte, new_table);
