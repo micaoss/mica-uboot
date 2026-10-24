@@ -5,12 +5,12 @@
 #     follow branch:<name>   fast-forward to the upstream branch head
 #     follow release:<tag>   fast-forward to the newest point release <tag>.<n> (or <tag> itself); the next
 #                            release line is a new mirror row
-#   board   <name>  <mirror branch>
-#     mica/<name> carries the board's commits on top of that mirror
+#   board   <board>-<function>  <mirror branch>
+#     mica/<board>-<function> carries that U-Boot variant's commits on top of the mirror (README.md, "Branches")
 mirror	u-boot/v2026.07	https://github.com/u-boot/u-boot.git	release:v2026.07
 mirror	coreelec/odroidc5-v2023.01	https://github.com/CoreELEC/u-boot.git	branch:odroidc5-v2023.01
 mirror	fifteenhex/mstar_rebase_mainline_20220624_dongshanpi_picow	https://github.com/fifteenhex/u-boot.git	branch:mstar_rebase_mainline_20220624_dongshanpi_picow
-board	cx3576	u-boot/v2026.07
-board	qemu-armhf	u-boot/v2026.07
-board	s905x5m	coreelec/odroidc5-v2023.01
-board	ssd202d	fifteenhex/mstar_rebase_mainline_20220624_dongshanpi_picow
+board	cx3576-emmc	u-boot/v2026.07
+board	qemu-armhf-nor	u-boot/v2026.07
+board	s905x5m-emmc	coreelec/odroidc5-v2023.01
+board	ssd202d-spinand	fifteenhex/mstar_rebase_mainline_20220624_dongshanpi_picow

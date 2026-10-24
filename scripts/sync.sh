@@ -9,7 +9,7 @@
 #   SYNC_CONFIG the rows (default: sync.tsv at the repository root)
 #   SYNC_REPORT where the rows that need a human are written, one per line (default: sync-report.txt)
 #
-# Nothing is ever force-pushed: a mirror and a mica/<board> branch only move forward, so every commit a build has
+# Nothing is ever force-pushed: a mirror and a mica/<board>-<function> branch only move forward, so every commit a build has
 # pinned stays on its branch. A mirror whose upstream is not a fast-forward or a merge that conflicts stops that
 # row and is written to the report; the other rows go on. The exit status is 1 when the report is not empty.
 set -euo pipefail
@@ -73,7 +73,7 @@ while IFS=$'\t' read -r _ board mirror; do
     target="${MIRROR[$mirror]:-}"
     [ -n "$target" ] || { need_human "board ${board}: no mirror row ${mirror}"; continue; }
     current="$(remote_ref "$head")"
-    [ -n "$current" ] || { need_human "board ${board}: no ${head} on origin"; continue; }
+    [ -n "$current" ] || { echo "board ${board}: no ${head} yet, skipped"; continue; }
     git fetch --quiet --no-tags origin "+refs/heads/${head}:refs/sync/head/${board}"
     if git merge-base --is-ancestor "$target" "refs/sync/head/${board}"; then
         echo "board ${board}: ${head} is on ${mirror} ${target}"
