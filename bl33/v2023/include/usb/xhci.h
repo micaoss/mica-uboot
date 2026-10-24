@@ -1263,6 +1263,8 @@ void xhci_acknowledge_event(struct xhci_ctrl *ctrl);
 union xhci_trb *xhci_wait_for_event(struct xhci_ctrl *ctrl, trb_type expected);
 int xhci_bulk_tx(struct usb_device *udev, unsigned long pipe,
 		 int length, void *buffer);
+int xhci_int_poll(struct usb_device *udev, unsigned long pipe,
+		  int length, void *buffer);
 int xhci_ctrl_tx(struct usb_device *udev, unsigned long pipe,
 		 struct devrequest *req, int length, void *buffer);
 int xhci_check_maxpacket(struct usb_device *udev);

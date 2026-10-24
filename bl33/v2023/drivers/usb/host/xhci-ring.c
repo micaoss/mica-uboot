@@ -576,6 +576,113 @@ static void record_transfer_result(struct usb_device *udev,
 	}
 }
 
+/**
+ * xhci_int_poll() - submit or poll one non-blocking interrupt transfer
+ *
+ * U-Boot's xHCI bulk path waits for a transfer event and aborts the endpoint
+ * after a timeout. That is correct for synchronous bulk traffic, but an idle
+ * HID interrupt endpoint is expected not to complete. Keep one TRB pending and
+ * inspect the event ring on later polls instead of entering the timeout path.
+ *
+ * @udev: USB device
+ * @pipe: interrupt pipe
+ * @length: persistent input buffer size
+ * @buffer: persistent input buffer
+ * Return: 0 when a transfer completed, -EAGAIN while one is pending, or an
+ * error before a transfer was queued
+ */
+int xhci_int_poll(struct usb_device *udev, unsigned long pipe,
+		  int length, void *buffer)
+{
+	struct xhci_ctrl *ctrl = xhci_get_ctrl(udev);
+	struct xhci_virt_device *virt_dev = ctrl->devs[udev->slot_id];
+	int ep_index = usb_pipe_ep_index(pipe);
+	unsigned long pending = BIT(ep_index);
+	struct xhci_ep_ctx *ep_ctx;
+	struct xhci_ring *ring;
+	struct xhci_generic_trb *start_trb;
+	union xhci_trb *event;
+	u64 buf_64 = xhci_virt_to_bus(ctrl, buffer);
+	u32 field, trb_fields[4];
+	int ret, start_cycle;
+
+	if (udev->int_pending & pending) {
+		while (event_ready(ctrl)) {
+			trb_type type;
+
+			event = ctrl->event_ring->dequeue;
+			type = TRB_FIELD_TO_TYPE(
+				le32_to_cpu(event->event_cmd.flags));
+			if (type == TRB_TRANSFER) {
+				field = le32_to_cpu(event->trans_event.flags);
+				if (TRB_TO_SLOT_ID(field) != udev->slot_id ||
+				    TRB_TO_EP_INDEX(field) != ep_index)
+					return -EAGAIN;
+
+				record_transfer_result(udev, event, length);
+				xhci_acknowledge_event(ctrl);
+				xhci_inval_cache((uintptr_t)buffer, length);
+				udev->int_pending &= ~pending;
+				udev->irq_status = udev->status;
+				udev->irq_act_len = udev->act_len;
+
+				if (udev->status || udev->act_len != length)
+					return -EIO;
+				return 0;
+			}
+
+			/* Match the synchronous waiter for non-transfer events. */
+			if (type == TRB_PORT_STATUS)
+				BUG_ON(GET_COMP_CODE(le32_to_cpu(
+					event->generic.field[2])) != COMP_SUCCESS);
+			xhci_acknowledge_event(ctrl);
+		}
+
+		return -EAGAIN;
+	}
+
+	if (length <= 0 || length > TRB_MAX_BUFF_SIZE ||
+	    (lower_32_bits(buf_64) & (TRB_MAX_BUFF_SIZE - 1)) + length >
+		TRB_MAX_BUFF_SIZE)
+		return -EMSGSIZE;
+
+	xhci_inval_cache((uintptr_t)virt_dev->out_ctx->bytes,
+			 virt_dev->out_ctx->size);
+	ep_ctx = xhci_get_ep_ctx(ctrl, virt_dev->out_ctx, ep_index);
+	ring = virt_dev->eps[ep_index].ring;
+	if (!ring)
+		return -ENODEV;
+
+	ret = prepare_ring(ctrl, ring,
+			   le32_to_cpu(ep_ctx->ep_info) & EP_STATE_MASK);
+	if (ret < 0)
+		return ret;
+
+	start_trb = &ring->enqueue->generic;
+	start_cycle = ring->cycle_state;
+	field = TRB_IOC | TRB_TYPE(TRB_NORMAL);
+	if (!start_cycle)
+		field |= TRB_CYCLE;
+	if (usb_pipein(pipe))
+		field |= TRB_ISP;
+
+	xhci_flush_cache((uintptr_t)buffer, length);
+	trb_fields[0] = lower_32_bits(buf_64);
+	trb_fields[1] = upper_32_bits(buf_64);
+	trb_fields[2] = TRB_LEN(length) | TRB_INTR_TARGET(0);
+	trb_fields[3] = field;
+	queue_trb(ctrl, ring, false, trb_fields);
+
+	udev->status = USB_ST_NOT_PROC;
+	udev->act_len = 0;
+	udev->irq_status = USB_ST_NOT_PROC;
+	udev->irq_act_len = 0;
+	udev->int_pending |= pending;
+	giveback_first_trb(udev, ep_index, start_cycle, start_trb);
+
+	return -EAGAIN;
+}
+
 /**** Bulk and Control transfer methods ****/
 /**
  * Queues up the BULK Request
