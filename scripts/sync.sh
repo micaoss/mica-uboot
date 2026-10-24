@@ -1,30 +1,24 @@
 #!/usr/bin/env bash
-# The weekly sync (README.md, "Sync"): fast-forward every mirror branch to its upstream, then cut a dated snapshot
-# of every board whose mirror moved, its commits cherry-picked onto the new mirror head.
+# The manual U-Boot update (README.md, "Updating U-Boot"): fast-forward every mirror branch to its upstream, then
+# merge the new mirror head into every board that is not on it yet. Run only when an update is wanted; nothing
+# schedules it.
 #
 #   scripts/sync.sh [--dry-run]
 #
 # Runs in a clone of this repository whose `origin` it pushes to. Environment:
-#   SYNC_DATE   the snapshot date, YYYYMMDD (default: today, UTC)
-#   SYNC_TIME   HHMM, the suffix of a second snapshot the same day, mica/<board>-YYYYMMDD-HHMM (default: now, UTC)
 #   SYNC_CONFIG the rows (default: sync.tsv at the repository root)
 #   SYNC_REPORT where the rows that need a human are written, one per line (default: sync-report.txt)
 #
-# Nothing is ever force-pushed except a moving head mica/<board>, and that only with a lease on the value it had
-# when this run fetched it. A mirror whose upstream is not a fast-forward, a cherry-pick that conflicts or a
-# snapshot name already taken (the -HHMM one too) stops that row and is written to the report; the other rows go on. The exit
-# status is 1 when the report is not empty.
+# Nothing is ever force-pushed: a mirror and a mica/<board> branch only move forward, so every commit a build has
+# pinned stays on its branch. A mirror whose upstream is not a fast-forward or a merge that conflicts stops that
+# row and is written to the report; the other rows go on. The exit status is 1 when the report is not empty.
 set -euo pipefail
 
 DRY_RUN=0
 [ "${1:-}" != "--dry-run" ] || DRY_RUN=1
-DATE="${SYNC_DATE:-$(date -u +%Y%m%d)}"
-TIME="${SYNC_TIME:-$(date -u +%H%M)}"
 REPORT="${SYNC_REPORT:-sync-report.txt}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${SYNC_CONFIG:-${ROOT}/sync.tsv}"
-[[ "$DATE" =~ ^[0-9]{8}$ ]] || { echo "error: SYNC_DATE=${DATE} is not YYYYMMDD" >&2; exit 2; }
-[[ "$TIME" =~ ^[0-9]{4}$ ]] || { echo "error: SYNC_TIME=${TIME} is not HHMM" >&2; exit 2; }
 : > "$REPORT"
 
 need_human() { echo "$*" | tee -a "$REPORT" >&2; }
@@ -36,7 +30,7 @@ rows() { sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$CONFIG" | awk -F
 # The head of every mirror after this run: where each board must be based.
 declare -A MIRROR
 while IFS=$'\t' read -r _ branch url follow; do
-    # A new row (a new release line is a human decision) has no branch yet: this run creates it.
+    # A new row (a new U-Boot release line) has no branch yet: this run creates it.
     old=""
     if [ -n "$(remote_ref "$branch")" ]; then
         git fetch --quiet --no-tags origin "+refs/heads/${branch}:refs/sync/old/${branch}"
@@ -76,51 +70,31 @@ done < <(rows mirror)
 
 while IFS=$'\t' read -r _ board mirror; do
     head="mica/${board}"
-    snapshot="mica/${board}-${DATE}"
     target="${MIRROR[$mirror]:-}"
     [ -n "$target" ] || { need_human "board ${board}: no mirror row ${mirror}"; continue; }
     current="$(remote_ref "$head")"
-    [ -n "$current" ] || { echo "board ${board}: no ${head} yet, skipped"; continue; }
+    [ -n "$current" ] || { need_human "board ${board}: no ${head} on origin"; continue; }
     git fetch --quiet --no-tags origin "+refs/heads/${head}:refs/sync/head/${board}"
-    # Based on the mirror head already: nothing to do. Otherwise this also catches up a board a previous run left
-    # behind on a conflict, since the mirror it follows has moved on without it.
     if git merge-base --is-ancestor "$target" "refs/sync/head/${board}"; then
         echo "board ${board}: ${head} is on ${mirror} ${target}"
         continue
     fi
-    base="$(git merge-base "$target" "refs/sync/head/${board}" || true)"
-    [ -n "$base" ] || { need_human "board ${board}: ${head} (${current}) shares no history with ${mirror}"; continue; }
-    # A second cut the same day is mica/<board>-YYYYMMDD-HHMM, which sorts after the plain date as a string.
-    [ -z "$(remote_ref "$snapshot")" ] || snapshot="${snapshot}-${TIME}"
-    if [ -n "$(remote_ref "$snapshot")" ]; then
-        need_human "board ${board}: ${snapshot} already exists; snapshots are never rewritten"
+    # The update is one merge commit on top of the board's history, so the branch only fast-forwards and the
+    # board's own commits stay one per change below it.
+    wt="$(mktemp -d)/${board}"
+    git worktree add --quiet --detach "$wt" "refs/sync/head/${board}"
+    if ! git -C "$wt" merge --quiet --no-ff --no-edit \
+        -m "Merge ${mirror} $(git describe --tags --always "$target") into ${head}" "$target" >/dev/null 2>&1; then
+        conflicts="$(git -C "$wt" diff --name-only --diff-filter=U | paste -sd' ')"
+        git -C "$wt" merge --abort || true
+        git worktree remove --force "$wt"
+        need_human "board ${board}: merging ${mirror} ${target} into ${head} conflicts in ${conflicts:-?}; nothing pushed"
         continue
     fi
-    wt="$(mktemp -d)/${board}"
-    git worktree add --quiet --detach "$wt" "$target"
-    picks="$(git rev-list --reverse --no-merges "${base}..refs/sync/head/${board}")"
-    failed=""
-    for c in $picks; do
-        git -C "$wt" cherry-pick "$c" >/dev/null 2>&1 && continue
-        # A commit the new upstream already carries applies as nothing: drop it. Anything else is a conflict.
-        if [ -z "$(git -C "$wt" ls-files -u)" ] && git -C "$wt" diff --cached --quiet; then
-            echo "board ${board}: $(git log -1 --format='%h %s' "$c") is already upstream, dropped"
-            git -C "$wt" cherry-pick --skip
-            continue
-        fi
-        failed="$c"
-        git -C "$wt" cherry-pick --abort || true
-        break
-    done
     tip="$(git -C "$wt" rev-parse HEAD)"
     git worktree remove --force "$wt"
-    if [ -n "$failed" ]; then
-        need_human "board ${board}: $(git log -1 --format='%h %s' "$failed") does not apply on ${mirror} ${target}; nothing pushed"
-        continue
-    fi
-    echo "board ${board}: ${snapshot} = ${tip} ($(git rev-list --count "${target}..${tip}") commits on ${mirror} ${target})"
-    push "${tip}:refs/heads/${snapshot}"
-    push --force-with-lease="refs/heads/${head}:${current}" "${tip}:refs/heads/${head}"
+    echo "board ${board}: ${head} ${current} -> ${tip} (merged ${mirror} ${target})"
+    push "${tip}:refs/heads/${head}"
 done < <(rows board)
 
 [ ! -s "$REPORT" ] || exit 1
