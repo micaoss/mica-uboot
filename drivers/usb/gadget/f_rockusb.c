@@ -332,7 +332,6 @@ static int rockusb_tx_write(const char *buffer, unsigned int buffer_size)
 	memcpy(in_req->buf, buffer, buffer_size);
 	in_req->length = buffer_size;
 	debug("Transferring 0x%x bytes\n", buffer_size);
-	usb_ep_dequeue(rockusb_func->in_ep, in_req);
 	ret = usb_ep_queue(rockusb_func->in_ep, in_req, 0);
 	if (ret)
 		printf("Error %d on queue\n", ret);
@@ -478,7 +477,6 @@ static void tx_handler_ul_image(struct usb_ep *ep, struct usb_request *req)
 	in_req->length = transfer_size;
 	in_req->complete = tx_handler_ul_image;
 	debug("Uploading 0x%x bytes\n", transfer_size);
-	usb_ep_dequeue(rockusb_func->in_ep, in_req);
 	ret = usb_ep_queue(rockusb_func->in_ep, in_req, 0);
 	if (ret)
 		printf("Error %d on queue\n", ret);
