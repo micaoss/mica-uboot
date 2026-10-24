@@ -487,7 +487,13 @@ int boot_get_fdt(int flag, int argc, char *const argv[], uint8_t arch,
 	if (argc > 2)
 		select = argv[2];
 
-#ifdef CONFIG_AMLOGIC_MODIFY
+#ifdef CONFIG_MICA_FILE_BOOT
+	/* The control FDT is for U-Boot; the kernel FDT belongs to its signed FIT. */
+	if (select || !genimg_has_config(images)) {
+		puts("Mica kernel FDT requires a FIT configuration without an override\n");
+		return 1;
+	}
+#elif defined(CONFIG_AMLOGIC_MODIFY)
 	if (!select) {
 		if (env_get("dtb_mem_addr")) {
 			select = env_get("dtb_mem_addr");
@@ -588,8 +594,13 @@ int boot_get_fdt(int flag, int argc, char *const argv[], uint8_t arch,
 	return 0;
 
 no_fdt:
+#ifdef CONFIG_MICA_FILE_BOOT
+	puts("Mica FIT configuration has no kernel device tree\n");
+	return 1;
+#else
 	debug("Continuing to boot without FDT\n");
 	return 0;
+#endif
 error:
 	return 1;
 }

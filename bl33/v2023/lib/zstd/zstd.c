@@ -13,6 +13,35 @@
 
 int zstd_decompress(struct abuf *in, struct abuf *out)
 {
+#ifdef CONFIG_MICA_FILE_BOOT
+	ZSTD_DCtx *dctx;
+	void *workspace;
+	size_t result, wsize = ZSTD_DCtxWorkspaceBound();
+	int ret;
+
+	/* FIT input and bounded output are contiguous; no window buffer is needed. */
+	if (!abuf_size(in) || !abuf_size(out) || abuf_size(out) > INT_MAX)
+		return -EINVAL;
+	workspace = malloc(wsize);
+	if (!workspace)
+		return -ENOMEM;
+	dctx = ZSTD_initDCtx(workspace, wsize);
+	if (!dctx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	result = ZSTD_decompressDCtx(dctx, abuf_data(out), abuf_size(out),
+				     abuf_data(in), abuf_size(in));
+	if (ZSTD_isError(result)) {
+		log_err("Mica Zstd decode failed: %d\n", ZSTD_getErrorCode(result));
+		ret = -EINVAL;
+	} else {
+		ret = (int)result;
+	}
+out:
+	free(workspace);
+	return ret;
+#else
 	ZSTD_DStream *dstream;
 	ZSTD_inBuffer in_buf;
 	ZSTD_outBuffer out_buf;
@@ -69,4 +98,5 @@ int zstd_decompress(struct abuf *in, struct abuf *out)
 do_free:
 	free(workspace);
 	return ret;
+#endif
 }

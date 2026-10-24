@@ -34,7 +34,8 @@
 #include <image.h>
 #include <version.h>
 
-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
+#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
+	!defined(CONFIG_MICA_FILE_BOOT)
 #include <dt_table.h>
 #include <image-android-dt.h>
 #endif
@@ -318,7 +319,8 @@ static int bootm_find_os(struct cmd_tbl *cmdtp, int flag, int argc,
 /*
  * load dtb overlay partition to mem
 */
-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
+#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
+	!defined(CONFIG_MICA_FILE_BOOT)
 static int read_fdto_partition(void)
 {
 	char cmd[128];
@@ -500,7 +502,8 @@ int bootm_find_images(int flag, int argc, char *const argv[], ulong start,
 {
 	int ret;
 
-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
+#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
+	!defined(CONFIG_MICA_FILE_BOOT)
 	u32 fdto_totalsize = 0;
 #endif
 
@@ -547,7 +550,8 @@ int bootm_find_images(int flag, int argc, char *const argv[], ulong start,
 	if (CONFIG_IS_ENABLED(CMD_FDT))
 		set_working_fdt_addr(map_to_sysmem(images.ft_addr));
 
-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
+#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
+	!defined(CONFIG_MICA_FILE_BOOT)
 	if (get_fdto_totalsize(&fdto_totalsize) == 0)
 		fdt_set_totalsize(images.ft_addr, fdt_get_header(images.ft_addr,
 			totalsize) + fdto_totalsize);
