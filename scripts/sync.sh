@@ -6,22 +6,25 @@
 #
 # Runs in a clone of this repository whose `origin` it pushes to. Environment:
 #   SYNC_DATE   the snapshot date, YYYYMMDD (default: today, UTC)
+#   SYNC_TIME   HHMM, the suffix of a second snapshot the same day, mica/<board>-YYYYMMDD-HHMM (default: now, UTC)
 #   SYNC_CONFIG the rows (default: sync.tsv at the repository root)
 #   SYNC_REPORT where the rows that need a human are written, one per line (default: sync-report.txt)
 #
 # Nothing is ever force-pushed except a moving head mica/<board>, and that only with a lease on the value it had
 # when this run fetched it. A mirror whose upstream is not a fast-forward, a cherry-pick that conflicts or a
-# snapshot name that already exists stops that row and is written to the report; the other rows go on. The exit
+# snapshot name already taken (the -HHMM one too) stops that row and is written to the report; the other rows go on. The exit
 # status is 1 when the report is not empty.
 set -euo pipefail
 
 DRY_RUN=0
 [ "${1:-}" != "--dry-run" ] || DRY_RUN=1
 DATE="${SYNC_DATE:-$(date -u +%Y%m%d)}"
+TIME="${SYNC_TIME:-$(date -u +%H%M)}"
 REPORT="${SYNC_REPORT:-sync-report.txt}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${SYNC_CONFIG:-${ROOT}/sync.tsv}"
 [[ "$DATE" =~ ^[0-9]{8}$ ]] || { echo "error: SYNC_DATE=${DATE} is not YYYYMMDD" >&2; exit 2; }
+[[ "$TIME" =~ ^[0-9]{4}$ ]] || { echo "error: SYNC_TIME=${TIME} is not HHMM" >&2; exit 2; }
 : > "$REPORT"
 
 need_human() { echo "$*" | tee -a "$REPORT" >&2; }
@@ -87,6 +90,8 @@ while IFS=$'\t' read -r _ board mirror; do
     fi
     base="$(git merge-base "$target" "refs/sync/head/${board}" || true)"
     [ -n "$base" ] || { need_human "board ${board}: ${head} (${current}) shares no history with ${mirror}"; continue; }
+    # A second cut the same day is mica/<board>-YYYYMMDD-HHMM, which sorts after the plain date as a string.
+    [ -z "$(remote_ref "$snapshot")" ] || snapshot="${snapshot}-${TIME}"
     if [ -n "$(remote_ref "$snapshot")" ]; then
         need_human "board ${board}: ${snapshot} already exists; snapshots are never rewritten"
         continue

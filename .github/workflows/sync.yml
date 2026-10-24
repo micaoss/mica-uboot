@@ -36,9 +36,9 @@ jobs:
         run: |
           git config user.name "mica-uboot sync"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          date="$(date -u +%Y%m%d)"
-          echo "date=$date" >> "$GITHUB_OUTPUT"
-          SYNC_DATE="$date" SYNC_REPORT="$RUNNER_TEMP/sync-report.txt" bash scripts/sync.sh $DRY_RUN
+          now="$(date -u +%Y%m%d-%H%M)"
+          echo "date=${now%-*}" >> "$GITHUB_OUTPUT"
+          SYNC_DATE="${now%-*}" SYNC_TIME="${now#*-}" SYNC_REPORT="$RUNNER_TEMP/sync-report.txt" bash scripts/sync.sh $DRY_RUN
       - name: Open an issue for the rows that need a human
         if: failure()
         env:
