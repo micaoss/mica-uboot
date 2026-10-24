@@ -23,6 +23,11 @@
 
 #include <usb.h>
 
+#define USB_VENDOR_ID_KEYCHRON	0x3434
+#define USB_DEVICE_ID_KEYCHRON_LINK	0xd030
+#define USB_HID_QUIRK_POLL_NO_REPORT_IDLE	BIT(0)
+#define USB_HID_QUIRK_PREFER_LAST_BOOT_INTERFACE	BIT(1)
+
 /*
  * If overwrite_console returns 1, the stdin, stderr and stdout
  * are switched to the serial port, else the settings in the
@@ -105,6 +110,7 @@ struct usb_kbd_pdata {
 	int		intinterval;
 	unsigned long	last_report;
 	struct int_queue *intq;
+	uint32_t	ifnum;
 
 	uint32_t	repeat_delay;
 
@@ -150,8 +156,8 @@ static void usb_kbd_put_queue(struct usb_kbd_pdata *data, u8 c)
  */
 static void usb_kbd_setled(struct usb_device *dev)
 {
-	struct usb_interface *iface = &dev->config.if_desc[0];
 	struct usb_kbd_pdata *data = dev->privptr;
+	struct usb_interface *iface = &dev->config.if_desc[data->ifnum];
 	ALLOC_ALIGN_BUFFER(uint32_t, leds, 1, USB_DMA_MINALIGN);
 
 	*leds = data->flags & USB_KBD_LEDMASK;
@@ -365,7 +371,7 @@ static inline void usb_kbd_poll_for_event(struct usb_device *dev)
 #if defined(CONFIG_SYS_USB_EVENT_POLL_VIA_CONTROL_EP)
 	struct usb_interface *iface;
 	struct usb_kbd_pdata *data = dev->privptr;
-	iface = &dev->config.if_desc[0];
+	iface = &dev->config.if_desc[data->ifnum];
 	usb_get_report(dev, iface->desc.bInterfaceNumber,
 		       1, 0, data->new, USB_KBD_BOOT_REPORT_SIZE);
 	if (memcmp(data->old, data->new, USB_KBD_BOOT_REPORT_SIZE)) {
@@ -458,12 +464,26 @@ static int usb_kbd_getc(struct stdio_dev *sdev)
 	return data->usb_kbd_buffer[data->usb_out_pointer];
 }
 
+static unsigned int usb_kbd_get_quirks(struct usb_device *dev)
+{
+	unsigned int quirks = 0;
+
+	if (dev->descriptor.idVendor == USB_VENDOR_ID_KEYCHRON)
+		quirks |= USB_HID_QUIRK_POLL_NO_REPORT_IDLE;
+	if (dev->descriptor.idVendor == USB_VENDOR_ID_KEYCHRON &&
+	    dev->descriptor.idProduct == USB_DEVICE_ID_KEYCHRON_LINK)
+		quirks |= USB_HID_QUIRK_PREFER_LAST_BOOT_INTERFACE;
+
+	return quirks;
+}
+
 /* probes the USB device dev for keyboard type. */
 static int usb_kbd_probe_dev(struct usb_device *dev, unsigned int ifnum)
 {
 	struct usb_interface *iface;
 	struct usb_endpoint_descriptor *ep;
 	struct usb_kbd_pdata *data;
+	unsigned int quirks = usb_kbd_get_quirks(dev);
 	int epNum;
 
 	if (dev->descriptor.bNumConfigurations != 1)
@@ -508,6 +528,7 @@ static int usb_kbd_probe_dev(struct usb_device *dev, unsigned int ifnum)
 	/* allocate input buffer aligned and sized to USB DMA alignment */
 	data->new = memalign(USB_DMA_MINALIGN,
 		roundup(USB_KBD_BOOT_REPORT_SIZE, USB_DMA_MINALIGN));
+	data->ifnum = ifnum;
 
 	/* Insert private data into USB device structure */
 	dev->privptr = data;
@@ -533,6 +554,12 @@ static int usb_kbd_probe_dev(struct usb_device *dev, unsigned int ifnum)
 	debug("USB KBD: set idle interval=0...\n");
 	usb_set_idle(dev, iface->desc.bInterfaceNumber, 0, 0);
 #endif
+
+	/* Keychron keyboards only return reports while a key is pressed. */
+	if (quirks & USB_HID_QUIRK_POLL_NO_REPORT_IDLE) {
+		debug("USB KBD: quirk: skip testing device state\n");
+		return 1;
+	}
 
 	debug("USB KBD: enable interrupt pipe...\n");
 #ifdef CONFIG_SYS_USB_EVENT_POLL_VIA_INT_QUEUE
@@ -561,10 +588,22 @@ static int probe_usb_keyboard(struct usb_device *dev)
 {
 	char *stdinname;
 	struct stdio_dev usb_kbd_dev;
+	unsigned int attempt, ifnum;
+	unsigned int max_ifnum = min((unsigned int)USB_MAX_ACTIVE_INTERFACES,
+				     (unsigned int)dev->config.no_of_if);
+	unsigned int quirks = usb_kbd_get_quirks(dev);
 	int error;
 
 	/* Try probing the keyboard */
-	if (usb_kbd_probe_dev(dev, 0) != 1)
+	for (attempt = 0; attempt < max_ifnum; attempt++) {
+		if (quirks & USB_HID_QUIRK_PREFER_LAST_BOOT_INTERFACE)
+			ifnum = max_ifnum - attempt - 1;
+		else
+			ifnum = attempt;
+		if (usb_kbd_probe_dev(dev, ifnum) == 1)
+			break;
+	}
+	if (attempt >= max_ifnum)
 		return -ENOENT;
 
 	/* Register the keyboard */

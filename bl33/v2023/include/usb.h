@@ -46,6 +46,12 @@
  */
 #define USB_TIMEOUT_MS(pipe) (usb_pipebulk(pipe) ? 5000 : 1000)
 
+/*
+ * The xHCI host controller prepares only a limited number of interfaces and
+ * endpoints. Keep this limit visible to drivers that scan composite devices.
+ */
+#define USB_MAX_ACTIVE_INTERFACES	3
+
 /* device request (setup) */
 struct devrequest {
 	__u8	requesttype;

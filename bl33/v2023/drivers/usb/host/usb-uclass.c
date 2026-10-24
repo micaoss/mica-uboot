@@ -552,6 +552,7 @@ static int usb_find_and_bind_driver(struct udevice *parent,
 				    struct usb_device_descriptor *desc,
 				    struct usb_interface_descriptor *iface,
 				    int bus_seq, int devnum, int port,
+				    bool bind_generic,
 				    struct udevice **devp)
 {
 	struct usb_driver_entry *start, *entry;
@@ -594,6 +595,10 @@ static int usb_find_and_bind_driver(struct udevice *parent,
 			*devp = dev;
 			return 0;
 		}
+	}
+	if (!bind_generic) {
+		ret = -ENOENT;
+		goto error;
 	}
 
 	/* Bind a generic driver so that the device can be used */
@@ -648,9 +653,9 @@ int usb_scan_device(struct udevice *parent, int port,
 	struct usb_dev_plat *plat;
 	struct usb_bus_priv *priv;
 	struct usb_device *parent_udev;
-	int ret;
+	int ifnum, max_ifnum, ret;
 	ALLOC_CACHE_ALIGN_BUFFER(struct usb_device, udev, 1);
-	struct usb_interface_descriptor *iface = &udev->config.if_desc[0].desc;
+	struct usb_interface_descriptor *iface;
 
 	*devp = NULL;
 	memset(udev, '\0', sizeof(*udev));
@@ -696,15 +701,36 @@ int usb_scan_device(struct udevice *parent, int port,
 	debug("read_descriptor for '%s': ret=%d\n", parent->name, ret);
 	if (ret)
 		return ret;
-	ret = usb_find_child(parent, &udev->descriptor, iface, &dev);
-	debug("** usb_find_child returns %d\n", ret);
-	if (ret) {
+	max_ifnum = min((int)USB_MAX_ACTIVE_INTERFACES,
+			(int)udev->config.no_of_if);
+
+	for (ifnum = 0; ifnum < max_ifnum; ifnum++) {
+		iface = &udev->config.if_desc[ifnum].desc;
+		ret = usb_find_child(parent, &udev->descriptor, iface, &dev);
+		debug("** usb_find_child interface %d returns %d\n",
+		      ifnum, ret);
+		if (!ret)
+			break;
 		if (ret != -ENOENT)
 			return ret;
 		ret = usb_find_and_bind_driver(parent, &udev->descriptor,
 					       iface,
 					       dev_seq(udev->controller_dev),
-					       udev->devnum, port, &dev);
+					       udev->devnum, port, false, &dev);
+		if (!ret) {
+			created = true;
+			break;
+		}
+		if (ret != -ENOENT)
+			return ret;
+	}
+
+	if (ifnum == max_ifnum) {
+		iface = &udev->config.if_desc[0].desc;
+		ret = usb_find_and_bind_driver(parent, &udev->descriptor,
+					       iface,
+					       dev_seq(udev->controller_dev),
+					       udev->devnum, port, true, &dev);
 		if (ret)
 			return ret;
 		created = true;
