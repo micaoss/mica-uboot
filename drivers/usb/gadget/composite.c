@@ -1048,10 +1048,13 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 			cdev->desc.bMaxPacketSize0 =
 				cdev->gadget->ep0->maxpacket;
 			if (gadget->speed >= USB_SPEED_SUPER) {
-				cdev->desc.bcdUSB = cpu_to_le16(0x0310);
+				cdev->desc.bcdUSB = cpu_to_le16(0x0310 |
+					(le16_to_cpu(cdev->desc.bcdUSB) & 0x0001));
 				cdev->desc.bMaxPacketSize0 = 9;
 			} else {
-				cdev->desc.bcdUSB = cpu_to_le16(0x0200);
+				/* Preserve a protocol discriminator set by board fixup. */
+				cdev->desc.bcdUSB = cpu_to_le16(0x0200 |
+					(le16_to_cpu(cdev->desc.bcdUSB) & 0x0001));
 			}
 			value = min(w_length, (u16) sizeof cdev->desc);
 			memcpy(req->buf, &cdev->desc, value);

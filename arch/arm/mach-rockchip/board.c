@@ -226,8 +226,35 @@ int g_dnl_bind_fixup(struct usb_device_descriptor *dev, const char *name)
 	else
 		put_unaligned(CONFIG_USB_GADGET_PRODUCT_NUM, &dev->idProduct);
 
+	/*
+	 * Rockchip host tools read bcdUSB & 1 as loader-vs-maskrom. Without
+	 * the odd value they treat rockusb as a BootROM device and speak the
+	 * 0x471/0x472 maskrom protocol this gadget does not implement.
+	 */
+	if (!strcmp(name, "usb_dnl_rockusb"))
+		put_unaligned(cpu_to_le16(0x0201), &dev->bcdUSB);
+
 	return 0;
 }
+
+#if IS_ENABLED(CONFIG_USB_FUNCTION_ROCKUSB)
+void rkusb_set_reboot_flag(int flag);
+void rkusb_set_reboot_flag(int flag)
+{
+	/*
+	 * K_FW_RESET subcodes sent by Rockchip host tools ("uf" bounces a
+	 * loader-mode device back to real maskrom this way):
+	 * 0x03 = reboot to BootROM download, 0x06 = reboot to loader.
+	 */
+	if (!CONFIG_ROCKCHIP_BOOT_MODE_REG)
+		return;
+
+	if (flag == 0x03)
+		writel(BOOT_BROM_DOWNLOAD, CONFIG_ROCKCHIP_BOOT_MODE_REG);
+	else if (flag == 0x06)
+		writel(BOOT_LOADER, CONFIG_ROCKCHIP_BOOT_MODE_REG);
+}
+#endif /* CONFIG_USB_FUNCTION_ROCKUSB */
 #endif /* CONFIG_USB_GADGET_DOWNLOAD */
 
 #if IS_ENABLED(CONFIG_USB_GADGET_DWC2_OTG) && !IS_ENABLED(CONFIG_DM_USB_GADGET)

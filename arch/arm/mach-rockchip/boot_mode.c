@@ -97,6 +97,10 @@ int setup_boot_mode(void)
 	writel(BOOT_NORMAL, reg);
 
 	switch (boot_mode) {
+	case BOOT_LOADER:
+		debug("%s: enter rockusb loader!\n", __func__);
+		env_set("preboot", "setenv preboot; rockusb 0 mmc 0");
+		break;
 	case BOOT_FASTBOOT:
 		debug("%s: enter fastboot!\n", __func__);
 		env_set("preboot", "setenv preboot; fastboot usb 0");
