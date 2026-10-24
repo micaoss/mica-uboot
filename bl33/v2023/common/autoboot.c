@@ -406,7 +406,7 @@ static int abortboot_single_key(int bootdelay)
 					menukey = key;
 				break;
 			}
-#ifdef CONFIG_AMLOGIC_MODIFY
+#if defined(CONFIG_AMLOGIC_MODIFY) && !defined(CONFIG_S7D_BM201)
 			udelay(10000);
 		} while (!abort && get_timer(ts) < 100);
 #else
