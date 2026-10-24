@@ -107,3 +107,7 @@ obj-$(CONFIG_$(PHASE_)STACKPROTECTOR) += stackprot.o
 obj-$(CONFIG_SCP03) += scp03.o
 
 obj-$(CONFIG_QFW) += qfw.o
+
+ifndef CONFIG_XPL_BUILD
+obj-$(CONFIG_MICA_UBI_BOOT) += mica-ubi-boot.o
+endif

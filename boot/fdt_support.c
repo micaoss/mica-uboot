@@ -347,6 +347,18 @@ int fdt_chosen(void *fdt)
 	if (nodeoffset < 0)
 		return nodeoffset;
 
+#if defined(CONFIG_MICA_UBI_BOOT) && !defined(CONFIG_XPL_BUILD)
+	{
+		extern char mica_deployment_id[65];
+
+		if (strlen(mica_deployment_id) != 64)
+			return -EINVAL;
+		err = fdt_setprop_string(fdt, nodeoffset, "mica,deployment-id", mica_deployment_id);
+		if (err)
+			return err;
+	}
+#endif
+
 	/* if DM_RNG enabled automatically inject kaslr-seed node unless:
 	 * CONFIG_MEASURED_BOOT enabled: as dt modifications break measured boot
 	 * CONFIG_ARMV8_SEC_FIRMWARE_SUPPORT enabled: as that implementation does not use dm yet
