@@ -2051,3 +2051,11 @@ config CEDIT
 endmenu		# Configuration editor
 
 endmenu		# Booting
+
+config MICA_FILE_BOOT
+	bool "Mica OS fixed signed FIT file boot policy"
+	depends on ROCKCHIP_RK3576
+	help
+	  Select bounded deployment records from raw redundant environment storage.
+	  Persist trial counters before loading a required signed FIT. Persistent
+	  environment commands are not imported; micaboot uses the standard CLI.

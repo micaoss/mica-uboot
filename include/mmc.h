@@ -894,6 +894,7 @@ void print_mmc_devices(char separator);
  */
 int get_mmc_num(void);
 int mmc_switch_part(struct mmc *mmc, unsigned int part_num);
+int mmc_flush_cache(struct mmc *mmc);
 int mmc_hwpart_config(struct mmc *mmc, const struct mmc_hwpart_conf *conf,
 		      enum mmc_hwpart_conf_mode mode);
 

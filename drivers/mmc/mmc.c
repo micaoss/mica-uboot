@@ -928,6 +928,22 @@ int mmc_switch(struct mmc *mmc, u8 set, u8 index, u8 value)
 	return __mmc_switch(mmc, set, index, value, true);
 }
 
+#if defined(CONFIG_MICA_FILE_BOOT) && !defined(CONFIG_XPL_BUILD)
+/* eMMC EXT_CSD CACHE_CTRL (33) and FLUSH_CACHE (32), as in Linux mmc.h. */
+int mmc_flush_cache(struct mmc *mmc)
+{
+	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
+	int ret;
+
+	if (IS_SD(mmc))
+		return -EINVAL;
+	ret = mmc_send_ext_csd(mmc, ext_csd);
+	if (ret || !(ext_csd[33] & 1))
+		return ret;
+	return mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL, 32, 1);
+}
+#endif
+
 int mmc_boot_wp(struct mmc *mmc)
 {
 	return mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_BOOT_WP, 1);
