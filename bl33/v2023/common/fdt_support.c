@@ -296,6 +296,18 @@ int fdt_chosen(void *fdt)
 	if (nodeoffset < 0)
 		return nodeoffset;
 
+#ifdef CONFIG_MICA_FILE_BOOT
+	{
+		extern char mica_deployment_id[65];
+
+		if (strlen(mica_deployment_id) != 64)
+			return -EINVAL;
+		err = fdt_setprop_string(fdt, nodeoffset, "mica,deployment-id", mica_deployment_id);
+		if (err)
+			return err;
+	}
+#endif
+
 #ifndef CONFIG_AMLOGIC_MODIFY
 	if (IS_ENABLED(CONFIG_BOARD_RNG_SEED) && !board_rng_seed(&buf)) {
 #else

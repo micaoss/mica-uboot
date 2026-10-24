@@ -1085,3 +1085,7 @@ config FDT_SIMPLEFB
 	  These functions can be used by board to indicate to the OS
 	  the presence of the simple frame buffer with associated reserved
 	  memory
+
+config MICA_FILE_BOOT
+	bool "Fixed signed Mica OS file boot"
+	depends on FIT_SIGNATURE && ENV_IS_NOWHERE

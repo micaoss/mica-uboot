@@ -130,7 +130,7 @@ static int meson_gxbb_wdt_probe(struct udevice *dev)
 	rate = clk_get_rate(&w_clk);
 	if (IS_ERR_VALUE(rate)) {
 		printf("Failed to get wdt-clk rate.\n");
-		return ret;
+		return (int)rate;
 	}
 
 	reset_by_soc  = !(readl(priv->regs + MESON_WDT_CTRL1_REG) &
@@ -232,7 +232,7 @@ static int meson_wdt_probe(struct udevice *dev)
 	dri->ops = priv->ops;
 	if (device_is_compatible(dev,"amlogic,meson-gxbb-wdt") ||
 	    device_is_compatible(dev,"amlogic,meson-sc2-wdt"))
-		meson_gxbb_wdt_probe(dev);
+		return meson_gxbb_wdt_probe(dev);
 
 	return 0;
 }

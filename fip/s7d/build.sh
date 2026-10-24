@@ -521,7 +521,7 @@ function mk_uboot() {
 	sector=512
 	seek=0
 	seek_sector=0
-	dateStamp=S7D-${CHIPSET_NAME}-`date +%y%m%d%H%M%S`
+	dateStamp=S7D-${CHIPSET_NAME}-`date -u -d @${SOURCE_DATE_EPOCH} +%y%m%d%H%M%S`
 
 	echo @AMLBOOT > ${file_info_cfg_temp}
 	dd if=${file_info_cfg_temp} of=${file_info_cfg} bs=1 count=8 conv=notrunc &> /dev/null

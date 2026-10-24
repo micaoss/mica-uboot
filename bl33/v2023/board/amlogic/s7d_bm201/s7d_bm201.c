@@ -202,6 +202,18 @@ int board_init(void)
 	return 0;
 }
 
+static void bm201_check_usb_recovery_key(void)
+{
+#ifdef CONFIG_ENABLE_AML_GPIO_UPGRADE
+	if (run_command("gpio input " CONFIG_AML_GPIO_UPGRADE_KEY, 0))
+		return;
+
+	puts("Mica USB recovery key detected\n");
+	run_command("run usb_burning", 0);
+	puts("Mica USB recovery returned; continuing normal boot\n");
+#endif
+}
+
 int board_late_init(void)
 {
 	extern int s7d_bm201_osd_video_prepare(void);
@@ -212,7 +224,22 @@ int board_late_init(void)
 	env_set("defenv_para", "-c");
 	if (env_get_ulong("default_env", 10, 0))
 		env_set("defenv_para", "-c0"); //andr factory reset or factory burn
-	aml_board_late_init_front(NULL);
+	bm201_check_usb_recovery_key();
+	board_init_mem();
+	/* The control FDT supplies hardware facts before the signed kernel is loaded. */
+	{
+		char dtb_mem_addr[2 + sizeof(ulong) * 2 + 1];
+
+		snprintf(dtb_mem_addr, sizeof(dtb_mem_addr), "0x%lx",
+			 (ulong)gd->fdt_blob);
+		env_set("dtb_mem_addr", dtb_mem_addr);
+	}
+	run_command("fdt addr ${dtb_mem_addr}", 0);
+	env_set("bootcmd", "micaboot");
+	env_set("preboot", NULL);
+	env_set("bootdelay", "1");
+	env_set("fdt_high", "0xffffffffffffffff");
+	env_set("initrd_high", "0xffffffffffffffff");
 #ifdef CONFIG_PXP_EMULATOR
 	return 0;
 #endif
@@ -230,7 +257,7 @@ int board_late_init(void)
 #endif
 	PUSH_TIME_TE("vpu vpp init", BL33_VPUVPP_INIT_e);
 	set_usb_status();
-	aml_board_late_init_tail(NULL);
+	/* Vendor environment imports, trial counters and automatic installers are retired. */
 
 	/* Keep serial usable unless every optional console component is ready. */
 	ret = env_set("stdin", "serial");
@@ -241,7 +268,7 @@ int board_late_init(void)
 		return 0;
 	}
 
-	ret = env_set("bootdelay", "3");
+	ret = env_set("bootdelay", "1");
 	if (ret) {
 		printf("HDMI console: failed to set autoboot delay (%d)\n", ret);
 		return 0;

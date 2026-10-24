@@ -127,3 +127,5 @@ obj-$(CONFIG_ARMV8_MULTIENTRY) += smp.o
 obj-$(CONFIG_CMD_AFM) += cmd_afm.o
 
 UASAN_SANITIZE_smp.o := n
+
+obj-$(CONFIG_MICA_FILE_BOOT) += mica-file-boot.o
