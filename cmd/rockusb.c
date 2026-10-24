@@ -6,6 +6,7 @@
 #include <command.h>
 #include <console.h>
 #include <g_dnl.h>
+#include <u-boot/schedule.h>
 #include <usb.h>
 #include <asm/arch-rockchip/f_rockusb.h>
 
@@ -56,6 +57,7 @@ static int do_rockusb(struct cmd_tbl *cmdtp, int flag, int argc,
 			break;
 		if (ctrlc())
 			break;
+		schedule();
 		dm_usb_gadget_handle_interrupts(udc);
 		rockusb_flush_write_cache_if_idle();
 	}
