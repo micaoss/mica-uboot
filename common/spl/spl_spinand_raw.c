@@ -83,7 +83,7 @@ static int spl_spinand_raw_load_image(struct spl_image_info *spl_image, struct s
 	if (!mtd)
 		return -ENODEV;
 	ret = spl_spinand_raw_read(mtd, spl_image, bootdev);
-	printf("SPL: U-Boot at 0x%llx: %s (%d)\n", (unsigned long long)CONFIG_SPL_SPINAND_RAW_OFFS,
+	printf("SPL: U-Boot at 0x%x: %s (%d)\n", (unsigned int)CONFIG_SPL_SPINAND_RAW_OFFS,
 	       ret ? "invalid" : "loaded", ret);
 	return ret;
 }
