@@ -57,6 +57,7 @@ static int do_rockusb(struct cmd_tbl *cmdtp, int flag, int argc,
 		if (ctrlc())
 			break;
 		dm_usb_gadget_handle_interrupts(udc);
+		rockusb_flush_write_cache_if_idle();
 	}
 	ret = CMD_RET_SUCCESS;
 

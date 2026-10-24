@@ -101,6 +101,71 @@ static struct f_rockusb *rockusb_func;
 static void rx_handler_command(struct usb_ep *ep, struct usb_request *req);
 static int rockusb_tx_write_csw(u32 tag, int residue, u8 status, int size);
 
+static int rockusb_flush_write_cache(struct f_rockusb *f_rkusb)
+{
+	lbaint_t blkcnt;
+	lbaint_t blks;
+
+	if (f_rkusb->write_cache_failed)
+		return -EIO;
+	if (!f_rkusb->write_cache_bytes)
+		return 0;
+	if (!f_rkusb->desc || !f_rkusb->write_cache)
+		return -ENODEV;
+	if (f_rkusb->write_cache_bytes % f_rkusb->desc->blksz)
+		return -EINVAL;
+
+	blkcnt = f_rkusb->write_cache_bytes / f_rkusb->desc->blksz;
+	blks = blk_dwrite(f_rkusb->desc, f_rkusb->write_cache_lba,
+			  blkcnt, f_rkusb->write_cache);
+	if (blks != blkcnt) {
+		printf("failed flushing %u cached bytes to %s: %u\n",
+		       f_rkusb->write_cache_bytes, f_rkusb->dev_type,
+		       f_rkusb->dev_index);
+		f_rkusb->write_cache_failed = true;
+		return -EIO;
+	}
+
+	f_rkusb->write_cache_bytes = 0;
+	return 0;
+}
+
+static int rockusb_cache_write(struct f_rockusb *f_rkusb, lbaint_t lba,
+			       const void *buffer, unsigned int size)
+{
+	lbaint_t next_lba;
+	int ret;
+
+	if (f_rkusb->write_cache_failed)
+		return -EIO;
+	if (!size || size > RKUSB_WRITE_CACHE_SIZE ||
+	    size % f_rkusb->desc->blksz)
+		return -EINVAL;
+
+	if (f_rkusb->write_cache_bytes) {
+		next_lba = f_rkusb->write_cache_lba +
+			   f_rkusb->write_cache_bytes / f_rkusb->desc->blksz;
+		if (lba != next_lba ||
+		    size > RKUSB_WRITE_CACHE_SIZE - f_rkusb->write_cache_bytes) {
+			ret = rockusb_flush_write_cache(f_rkusb);
+			if (ret)
+				return ret;
+		}
+	}
+
+	if (!f_rkusb->write_cache_bytes)
+		f_rkusb->write_cache_lba = lba;
+	memcpy((u8 *)f_rkusb->write_cache + f_rkusb->write_cache_bytes,
+	       buffer, size);
+	f_rkusb->write_cache_bytes += size;
+	f_rkusb->write_cache_last_ms = get_timer(0);
+
+	if (f_rkusb->write_cache_bytes == RKUSB_WRITE_CACHE_SIZE)
+		return rockusb_flush_write_cache(f_rkusb);
+
+	return 0;
+}
+
 struct f_rockusb *get_rkusb(void)
 {
 	struct f_rockusb *f_rkusb = rockusb_func;
@@ -122,6 +187,12 @@ struct f_rockusb *get_rkusb(void)
 
 		f_rkusb->buf = f_rkusb->buf_head;
 		memset(f_rkusb->buf_head, 0, RKUSB_BUF_SIZE);
+	}
+	if (!f_rkusb->write_cache) {
+		f_rkusb->write_cache = memalign(CONFIG_SYS_CACHELINE_SIZE,
+						 RKUSB_WRITE_CACHE_SIZE);
+		if (!f_rkusb->write_cache)
+			return NULL;
 	}
 	return f_rkusb;
 }
@@ -200,6 +271,7 @@ static void rockusb_disable(struct usb_function *f)
 {
 	struct f_rockusb *f_rkusb = func_to_rockusb(f);
 
+	rockusb_flush_write_cache(f_rkusb);
 	usb_ep_disable(f_rkusb->out_ep);
 	usb_ep_disable(f_rkusb->in_ep);
 
@@ -217,6 +289,10 @@ static void rockusb_disable(struct usb_function *f)
 		free(f_rkusb->buf_head);
 		f_rkusb->buf_head = NULL;
 		f_rkusb->buf = NULL;
+	}
+	if (f_rkusb->write_cache) {
+		free(f_rkusb->write_cache);
+		f_rkusb->write_cache = NULL;
 	}
 }
 
@@ -307,6 +383,7 @@ static int rockusb_add(struct usb_configuration *c)
 
 	status = usb_add_function(c, &f_rkusb->usb_function);
 	if (status) {
+		free(f_rkusb->write_cache);
 		free(f_rkusb->buf_head);
 		free(f_rkusb);
 		rockusb_func = NULL;
@@ -320,6 +397,21 @@ void rockusb_dev_init(char *dev_type, int dev_index)
 
 	f_rkusb->dev_type = dev_type;
 	f_rkusb->dev_index = dev_index;
+}
+
+int rockusb_flush_write_cache_if_idle(void)
+{
+	struct f_rockusb *f_rkusb = get_rkusb();
+
+	if (!f_rkusb)
+		return -ENOMEM;
+	if (!f_rkusb->write_cache_bytes)
+		return f_rkusb->write_cache_failed ? -EIO : 0;
+	if (get_timer(f_rkusb->write_cache_last_ms) <
+	    RKUSB_WRITE_CACHE_IDLE_MS)
+		return 0;
+
+	return rockusb_flush_write_cache(f_rkusb);
 }
 
 DECLARE_GADGET_BIND_CALLBACK(usb_dnl_rockusb, rockusb_add);
@@ -502,17 +594,16 @@ static void rx_handler_dl_image(struct usb_ep *ep, struct usb_request *req)
 	if (buffer_size < transfer_size)
 		transfer_size = buffer_size;
 
-	memcpy((void *)f_rkusb->buf, buffer, transfer_size);
 	f_rkusb->dl_bytes += transfer_size;
-	int blks = 0, blkcnt = transfer_size  / f_rkusb->desc->blksz;
+	int blkcnt = transfer_size / f_rkusb->desc->blksz;
 
 	debug("dl %x bytes, %x blks, write lba %x, dl_size:%x, dl_bytes:%x, ",
 	      transfer_size, blkcnt, f_rkusb->lba, f_rkusb->dl_size,
 	      f_rkusb->dl_bytes);
-	blks = blk_dwrite(f_rkusb->desc, f_rkusb->lba, blkcnt, f_rkusb->buf);
-	if (blks != blkcnt) {
-		printf("failed writing to device %s: %d\n", f_rkusb->dev_type,
-		       f_rkusb->dev_index);
+	if (rockusb_cache_write(f_rkusb, f_rkusb->lba, buffer,
+				transfer_size)) {
+		printf("failed caching write to device %s: %d\n",
+		       f_rkusb->dev_type, f_rkusb->dev_index);
 		rockusb_tx_write_csw(f_rkusb->tag, 0, CSW_FAIL,
 				     USB_BULK_CS_WRAP_LEN);
 		return;
@@ -901,6 +992,12 @@ static void rx_handler_command(struct usb_ep *ep, struct usb_request *req)
 #ifdef DEBUG
 	printcbw(req->buf);
 #endif
+	if (cbw->CDB[0] != K_FW_LBA_WRITE_10 &&
+	    rockusb_flush_write_cache(get_rkusb())) {
+		rockusb_tx_write_csw(cbw->tag, cbw->data_transfer_length,
+				     CSW_FAIL, USB_BULK_CS_WRAP_LEN);
+		goto requeue;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(cmd_dispatch_info); i++) {
 		if (cmd_dispatch_info[i].cmd == cbw->CDB[0]) {
@@ -924,6 +1021,7 @@ static void rx_handler_command(struct usb_ep *ep, struct usb_request *req)
 		}
 	}
 
+requeue:
 	*cmdbuf = '\0';
 	req->actual = 0;
 	usb_ep_queue(ep, req, 0);

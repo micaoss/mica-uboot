@@ -28,6 +28,8 @@
 
 #define RKUSB_BUF_SIZE		EP_BUFFER_SIZE * 2
 #define RKBLOCK_BUF_SIZE		4096
+#define RKUSB_WRITE_CACHE_SIZE		(1 * 1024 * 1024)
+#define RKUSB_WRITE_CACHE_IDLE_MS	100
 
 #define RKUSB_STATUS_IDLE			0
 #define RKUSB_STATUS_CMD			1
@@ -128,8 +130,14 @@ struct f_rockusb {
 	int reboot_flag;
 	void *buf;
 	void *buf_head;
+	void *write_cache;
+	lbaint_t write_cache_lba;
+	unsigned int write_cache_bytes;
+	ulong write_cache_last_ms;
+	bool write_cache_failed;
 };
 
 /* init rockusb device, tell rockusb which device you want to read/write*/
 void rockusb_dev_init(char *dev_type, int dev_index);
+int rockusb_flush_write_cache_if_idle(void);
 #endif /* _F_ROCKUSB_H_ */
