@@ -180,7 +180,11 @@ function amfc_compress() {
 	local path=$1
 	local comp_lv=$2
 	amfc_zstd_hdr=$1/amfc_zstd_hdr.bin
-	./fip/tools/zstd $1/bl33.bin.org -$comp_lv -o $1/bl33.bin.zstd
+	zstd $1/bl33.bin.org -$comp_lv -o $1/bl33.bin.zstd || {
+		echo "Error: zstd failed to compress bl33; refusing to pack an empty BL33" >&2
+		exit 1
+	}
+	[ -s $1/bl33.bin.zstd ] || { echo "Error: bl33.bin.zstd is empty" >&2; exit 1; }
 	bin_org_size=`stat -c %s $1/bl33.bin.org`
 	bin_zstd_size=`stat -c %s $1/bl33.bin.zstd`
 	printf "%s" "ZSTD" >  $amfc_zstd_hdr
