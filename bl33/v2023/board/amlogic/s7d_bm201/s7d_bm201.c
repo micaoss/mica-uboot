@@ -24,6 +24,7 @@
 #include <amlogic/board.h>
 #include <asm-generic/u-boot.h>
 #include <command.h>
+#include <stdio_dev.h>
 #include <asm/amlogic/arch/usb.h>
 #include <asm/amlogic/arch/stick_mem.h>
 
@@ -203,6 +204,10 @@ int board_init(void)
 
 int board_late_init(void)
 {
+	extern int s7d_bm201_osd_video_prepare(void);
+	struct udevice *video;
+	int ret;
+
 	printf("board late init\n");
 	env_set("defenv_para", "-c");
 	if (env_get_ulong("default_env", 10, 0))
@@ -226,6 +231,86 @@ int board_late_init(void)
 	PUSH_TIME_TE("vpu vpp init", BL33_VPUVPP_INIT_e);
 	set_usb_status();
 	aml_board_late_init_tail(NULL);
+
+	/* Keep serial usable unless every optional console component is ready. */
+	ret = env_set("stdin", "serial");
+	ret |= env_set("stdout", "serial");
+	ret |= env_set("stderr", "serial");
+	if (ret) {
+		printf("HDMI console: failed to establish serial recovery console\n");
+		return 0;
+	}
+
+	ret = env_set("bootdelay", "3");
+	if (ret) {
+		printf("HDMI console: failed to set autoboot delay (%d)\n", ret);
+		return 0;
+	}
+
+	ret = run_command("vout output ${outputmode}", 0);
+	if (ret) {
+		printf("HDMI console: failed to set output mode (%d)\n", ret);
+		return 0;
+	}
+
+	ret = s7d_bm201_osd_video_prepare();
+	if (ret) {
+		printf("HDMI console: failed to set OSD geometry (%d)\n", ret);
+		return 0;
+	}
+
+	ret = run_command("osd open", 0);
+	if (ret) {
+		printf("HDMI console: failed to open OSD (%d)\n", ret);
+		return 0;
+	}
+
+	ret = uclass_get_device(UCLASS_VIDEO, 0, &video);
+	if (ret) {
+		printf("HDMI console: video probe failed (%d)\n", ret);
+		return 0;
+	}
+
+	ret = run_command("osd enable", 0);
+	if (ret) {
+		printf("HDMI console: failed to enable OSD plane (%d)\n", ret);
+		return 0;
+	}
+
+	if (!stdio_get_by_name("vidconsole")) {
+		printf("HDMI console: vidconsole was not registered\n");
+		return 0;
+	}
+
+	if (env_set("stdout", "serial,vidconsole") ||
+	    env_set("stderr", "serial,vidconsole")) {
+		env_set("stdout", "serial");
+		env_set("stderr", "serial");
+		printf("HDMI console: failed to enable output multiplexing\n");
+		return 0;
+	}
+
+	printf("HDMI console: serial and video output enabled\n");
+
+	ret = run_command("usb start", 0);
+	if (ret) {
+		printf("HDMI console: USB start failed (%d); serial input retained\n",
+		       ret);
+		return 0;
+	}
+
+	if (!stdio_get_by_name("usbkbd")) {
+		printf("HDMI console: USB keyboard not found; serial input retained\n");
+		return 0;
+	}
+
+	if (env_set("stdin", "serial,usbkbd")) {
+		env_set("stdin", "serial");
+		printf("HDMI console: failed to enable input multiplexing\n");
+		return 0;
+	}
+
+	printf("HDMI console: serial and USB keyboard input enabled\n");
 	return 0;
 }
 
