@@ -90,3 +90,85 @@
 	phy-names = "usb2-phy";
 	status = "okay";
 };
+
+/ {
+	bootstd {
+		compatible = "u-boot,boot-std";
+		/* Rescue policy: eMMC first, SD as fallback, then USB. */
+		bootdev-order = "mmc0", "mmc1", "usb";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_work: led-work {
+			label = "work";
+			gpios = <&gpio0 RK_PB4 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_status_red: led-status-red {
+			label = "status-red";
+			gpios = <&gpio4 RK_PC7 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+		};
+
+		led_status_blue: led-status-blue {
+			label = "status-blue";
+			gpios = <&gpio4 RK_PB0 GPIO_ACTIVE_HIGH>;
+			default-state = "off";
+		};
+	};
+
+	vcc5v0_3v3: vcc5v0-3v3-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio4 RK_PB2 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_3v3_pwren>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+};
+
+&gpio2 {
+	usb-host1-pwren-hog {
+		gpio-hog;
+		gpios = <RK_PA6 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "usb-host1-pwren";
+	};
+
+	usb-host3-pwren-hog {
+		gpio-hog;
+		gpios = <RK_PA7 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "usb-host3-pwren";
+	};
+};
+
+&pinctrl {
+	vcc5v0-3v3-en {
+		vcc5v0_3v3_pwren: vcc5v0-3v3-pwren {
+			rockchip,pins = <4 RK_PB2 0 &pcfg_pull_none>;
+		};
+	};
+};
+
+&u2phy1 {
+	status = "okay";
+};
+
+&u2phy1_otg {
+	status = "okay";
+};
+
+&usb_drd1_dwc3 {
+	dr_mode = "host";
+	maximum-speed = "high-speed";
+	phys = <&u2phy1_otg>;
+	phy-names = "usb2-phy";
+	status = "okay";
+};
