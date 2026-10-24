@@ -12,6 +12,12 @@ function build_bl30() {
 			local current_dir=$(cd $(dirname $0); pwd)
 			local work_dir=${current_dir}/bl30/rtos_sdk
 			local output_dir
+			local ir_power_file=${work_dir}/boards/riscv/${CONFIG_BOARD_PACKAGE_NAME}/power.c
+			if [ "${CONFIG_BOARD_PACKAGE_NAME}" == "bm201_s905x5m" ] && [ -f "${ir_power_file}" ]; then
+				local old_ir_init="vIRInit(MODE_HARD_NEC, GPIODV_0, PIN_FUNC1, prvPowerKeyList,"
+				local new_ir_init="vIRInit(GPIODV_0, PIN_FUNC1, prvPowerKeyList,"
+				sed -i "s#${old_ir_init}#${new_ir_init}#" "${ir_power_file}"
+			fi
 			cd $work_dir && source scripts/env.sh riscv $CONFIG_SOC_NAME $CONFIG_BOARD_PACKAGE_NAME aocpu && make distclean &&  make REPO_DIR=$REPO_DIR && make docs REPO_DIR=$REPO_DIR &&    \
 				output_dir=$work_dir/output/riscv-$CONFIG_BOARD_PACKAGE_NAME-$PRODUCT/freertos
 			target=$output_dir/bl30.bin

@@ -107,7 +107,7 @@ void str_hw_init(void)
 	/*enable device & wakeup source interrupt*/
 	if (!IS_EN(BL30_IR_WAKEUP_MASK))
 #endif
-		vIRInit(MODE_HARD_NEC, GPIODV_0, PIN_FUNC1, prvPowerKeyList,
+		vIRInit(GPIODV_0, PIN_FUNC1, prvPowerKeyList,
 			ARRAY_SIZE(prvPowerKeyList), vIRHandler);
 #if BL30_SUSPEND_DEBUG_EN
 	else
