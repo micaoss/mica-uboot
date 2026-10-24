@@ -2408,7 +2408,25 @@ static int rk3576_clk_set_parent(struct clk *clk, struct clk *parent)
 }
 #endif
 
+static int rk3576_clk_enable(struct clk *clk)
+{
+	struct rk3576_clk_priv *priv = dev_get_priv(clk->dev);
+
+	switch (clk->id) {
+	case PCLK_WDT0:
+		rk_clrreg(&priv->cru->clkgate_con[16], BIT(7));
+		return 0;
+	case TCLK_WDT0:
+		/* DesignWare requests tclk; register access also needs pclk. */
+		rk_clrreg(&priv->cru->clkgate_con[16], BIT(7) | BIT(8));
+		return 0;
+	default:
+		return -ENOSYS;
+	}
+}
+
 static struct clk_ops rk3576_clk_ops = {
+	.enable = rk3576_clk_enable,
 	.get_rate = rk3576_clk_get_rate,
 	.set_rate = rk3576_clk_set_rate,
 #if (IS_ENABLED(OF_CONTROL)) || (!IS_ENABLED(OF_PLATDATA))
